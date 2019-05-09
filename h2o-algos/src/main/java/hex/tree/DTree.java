@@ -546,6 +546,17 @@ public class DTree extends Iced {
       for(int way = 0; way <2; way++ ) { // left / right
         // Create children histograms, not yet populated, but the ranges are set
         Constraints ncs = cs != null ? _split.nextLevelConstraints(cs, way, _splat, _tree._parms) : null;
+        // FIXME-MC
+/*
+        if (way == 0 && (_split._tree_p0 == cs._min || _split._tree_p0 == cs._max)) {
+          _nids[way] = ScoreBuildHistogram.UNDECIDED_CHILD_NODE_ID;
+          continue;
+        }
+        if (way == 1 && (_split._tree_p1 == cs._min || _split._tree_p1 == cs._max)) {
+          _nids[way] = ScoreBuildHistogram.UNDECIDED_CHILD_NODE_ID;
+          continue;
+        }
+*/
         DHistogram nhists[] = _split.nextLevelHistos(hs, way,_splat, _tree._parms, ncs); //maintains the full range for NAvsREST
         assert nhists==null || nhists.length==_tree._ncols;
         // Assign a new (yet undecided) node to each child, and connect this (the parent) decided node and the newly made histograms to it
@@ -1095,7 +1106,13 @@ public class DTree extends Iced {
         if (SharedTree.DEV_DEBUG)
           Log.info("minimum constraint violated in the left split of " + hs._name + ": left node will predict minimum bound: " + min);
         tree_p0 = min;
-        best_seL = pr1lo[best];
+        if (nasplit == DHistogram.NASplitDir.NAvsREST) {
+          best_seL = pr1hi[0];
+        } else if (nasplit == DHistogram.NASplitDir.NALeft) {
+          best_seL = pr1lo[best] + hs.seP1NA();
+        } else {
+          best_seL = pr1lo[best];
+        }
       }
       if (tree_p1 < min) {
         if (! useBounds) {
@@ -1106,7 +1123,13 @@ public class DTree extends Iced {
         if (SharedTree.DEV_DEBUG)
           Log.info("minimum constraint violated in the right split of " + hs._name + ": right node will predict minimum bound: " + min);
         tree_p1 = min;
-        best_seR = pr1hi[best];
+        if (nasplit == DHistogram.NASplitDir.NAvsREST) {
+          best_seR = hs.seP1NA();
+        } else if (nasplit == DHistogram.NASplitDir.NARight) {
+          best_seR = pr1hi[best] + hs.seP1NA();
+        } else {
+          best_seR = pr1hi[best];
+        }
       }
     }
     if (!Double.isNaN(max)) {
@@ -1119,7 +1142,13 @@ public class DTree extends Iced {
         if (SharedTree.DEV_DEBUG)
           Log.info("maximum constraint violated in the left split of " + hs._name + ": left node will predict maximum bound: " + max);
         tree_p0 = max;
-        best_seL = pr2lo[best];
+        if (nasplit == DHistogram.NASplitDir.NAvsREST) {
+          best_seL = pr2hi[0];
+        } else if (nasplit == DHistogram.NASplitDir.NALeft) {
+          best_seL = pr2lo[best] + hs.seP2NA();
+        } else {
+          best_seL = pr2lo[best];
+        }
       }
       if (tree_p1 > max) {
         if (! useBounds) {
@@ -1130,7 +1159,13 @@ public class DTree extends Iced {
         if (SharedTree.DEV_DEBUG)
           Log.info("maximum constraint violated in the right split of " + hs._name + ": right node will predict maximum bound: " + max);
         tree_p1 = max;
-        best_seR = pr2hi[best];
+        if (nasplit == DHistogram.NASplitDir.NAvsREST) {
+          best_seR = hs.seP2NA();
+        } else if (nasplit == DHistogram.NASplitDir.NARight) {
+          best_seR = pr2hi[best] + hs.seP2NA();
+        } else {
+          best_seR = pr2hi[best];
+        }
       }
     }
 
@@ -1138,6 +1173,12 @@ public class DTree extends Iced {
       if (SharedTree.DEV_DEBUG) Log.info("can't split " + hs._name + ": not enough relative improvement: " + (1-(best_seL + best_seR) / seBefore) + "\n" + hs);
       return null;
     }
+
+    if( MathUtils.equalsWithinOneSmallUlp((float) tree_p0,(float) tree_p1) ) {
+      if (SharedTree.DEV_DEBUG) Log.info("can't split " + hs._name + ": Predictions for left/right are the same.");
+      return null;
+    }
+
 
     // For categorical (unordered) predictors, we sorted the bins by average
     // prediction then found the optimal split on sorted bins
